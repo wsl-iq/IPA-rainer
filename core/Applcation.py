@@ -10,7 +10,7 @@ from datetime import datetime
 import os
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-os.environ["WebViewHTML"] = ".\\index.html"
+os.environ["WebViewHTML"] = "..\\index.html"
 os.system("cls" if os.name == "nt" else "clear")
 
 S = "\033[0m"        # Reset
@@ -74,7 +74,7 @@ def DevTools():
 
 webview.create_window(
     title="Web Tester",
-    url="index.html",
+    url="..\\index.html",
     width=800,
     height=600,
     resizable=True,

@@ -1,5 +1,21 @@
 ### IPA Trainer - English Learning Pronunciation
 
+### **Version `1.0.1`**
+
+### Fixes
+
+* **Fixed light mode icon and text visibility conflicts.**
+* **Added light mode color overrides** to ensure icons and text remain clearly visible.
+* **Fixed background color conflicts** affecting elements in light mode.
+
+### Issue
+
+* In light mode, some icons and text may have been difficult to see due to color and background conflicts.
+
+### Improvements
+
+* Improved overall **light mode readability and visual consistency**.
+
 
 ## About the Project
 

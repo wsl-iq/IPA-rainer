@@ -37,7 +37,7 @@ class IPATrainer {
         this.currentTraining = 0;
         this.trainingScore = 0;
         this.currentPage = 'home';
-        this.allSymbolsForDictionary = []; // تخزين جميع الرموز للقاموس
+        this.allSymbolsForDictionary = []; // Store all tokens for the dictionary.
         
         // Initialize
         this.init();
@@ -54,7 +54,7 @@ class IPATrainer {
         this.checkBrowserSupport();
         this.loadSavedSettings();
         this.setupResponsive();
-        this.setupDictionaryFilters(); // إعداد فلاتر القاموس
+        this.setupDictionaryFilters(); // Configuring dictionary filters
     }
     
     setupSidebar() {
@@ -192,10 +192,10 @@ class IPATrainer {
     }
     
     prepareDictionaryData() {
-        // تجهيز جميع الرموز للقاموس مع تصنيفها الصحيح
+        // Preparing all symbols for the dictionary with their correct classification.
         this.allSymbolsForDictionary = [];
         
-        // إضافة الحروف المتحركة
+        // Adding vowels
         if (this.ipaData?.vowels) {
             this.ipaData.vowels.forEach(s => {
                 this.allSymbolsForDictionary.push({
@@ -206,7 +206,7 @@ class IPATrainer {
             });
         }
         
-        // إضافة الحروف الساكنة
+        // Adding consonants
         if (this.ipaData?.consonants) {
             this.ipaData.consonants.forEach(s => {
                 this.allSymbolsForDictionary.push({
@@ -217,7 +217,7 @@ class IPATrainer {
             });
         }
         
-        // إضافة الأصوات المزدوجة
+        // Adding double sounds
         if (this.ipaData?.diphthongs) {
             this.ipaData.diphthongs.forEach(s => {
                 this.allSymbolsForDictionary.push({
@@ -397,13 +397,13 @@ class IPATrainer {
     }
     
     setupDictionaryFilters() {
-        // إعداد أزرار تصفية القاموس
+        // Configuring dictionary filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const filter = btn.dataset.filter;
                 this.filterDictionary(filter);
                 
-                // تحديث حالة active
+                // Update status to active
                 document.querySelectorAll('.filter-btn').forEach(b => {
                     b.classList.remove('active');
                 });
@@ -541,9 +541,9 @@ class IPATrainer {
         const cleanIPA = ipaString.replace(/[\/\[\]ˈˌ]/g, '');
         const symbols = [];
         
-        // تحليل الرموز مع مراعاة الأصوات المزدوجة
+        // Analysis of symbols, taking double sounds into account.
         for (let i = 0; i < cleanIPA.length; i++) {
-            // التحقق من الأصوات المزدوجة (حرفين)
+            // Checking for double sounds (two identical letters)
             if (i < cleanIPA.length - 1) {
                 const twoChars = cleanIPA[i] + cleanIPA[i + 1];
                 if (this.isDiphthong(twoChars)) {
@@ -553,7 +553,7 @@ class IPATrainer {
                 }
             }
             
-            // التحقق من الرموز مع علامة الطول (ː)
+            // Checking symbols with the length mark (ː)
             if (i < cleanIPA.length - 1 && cleanIPA[i + 1] === 'ː') {
                 symbols.push(cleanIPA[i] + 'ː');
                 i++;
@@ -1507,14 +1507,12 @@ class IPATrainer {
     }
 }
 
-
-
 let ipaTrainer;
 document.addEventListener('DOMContentLoaded', () => {
     ipaTrainer = new IPATrainer();
     window.ipaTrainer = ipaTrainer;
     
-    // التحقق من وجود اسم المستخدم
+    // Check if the username exists
     const userName = localStorage.getItem('userName');
     if (!userName) {
         document.getElementById('nameModal').classList.add('active');
@@ -1525,7 +1523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // حفظ اسم المستخدم
+    // Save username
     document.getElementById('saveUserNameBtn')?.addEventListener('click', () => {
         const nameInput = document.getElementById('userNameInput');
         const name = nameInput?.value.trim();
@@ -1779,7 +1777,7 @@ style.textContent = `
         color: var(--text-primary);
     }
     
-    /* تنسيق حقل الإدخال داخل المودال */
+    /* Formatting the input field inside the modal */
     .modal-body input,
     .modal-body textarea {
         width: 100%;
@@ -1806,7 +1804,7 @@ style.textContent = `
         direction: rtl;
     }
     
-    /* تنسيق الزر داخل المودال */
+    /* Styling the button inside the modal */
     .modal-body .btn-primary {
         width: 100%;
         margin-top: 15px;
@@ -1814,7 +1812,7 @@ style.textContent = `
         font-size: 1rem;
     }
     
-    /* نافذة الاسم - تحسينات إضافية */
+    /* Name Window – Additional Improvements */
     #nameModal .modal-content {
         max-width: 400px;
     }
@@ -1825,7 +1823,7 @@ style.textContent = `
         letter-spacing: 0.5px;
     }
     
-    /* منع overflow في الصفحات الصغيرة */
+    /* Preventing overflow on small pages */
     @media (max-width: 768px) {
         .modal-content {
             width: 95%;

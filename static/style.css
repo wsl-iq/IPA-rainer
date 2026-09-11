@@ -1895,3 +1895,126 @@ body {
         padding-top: 12px;
     }
 }
+
+/* Fix light mode icon/text conflicts */
+/* Light Mode Overrides */
+/* isuue: In light mode, some icons and text may not be visible due to color conflicts. This section ensures that icons and text are clearly visible in light mode by overriding their colors and backgrounds. */
+/* Version: 1.0.1 */
+
+[data-theme="light"] {
+    --icon-color: var(--primary);
+    --icon-bg-soft: rgba(99, 102, 241, 0.08);
+}
+
+[data-theme="light"] .icon,
+[data-theme="light"] i,
+[data-theme="light"] svg,
+[data-theme="light"] .fa,
+[data-theme="light"] .fas,
+[data-theme="light"] .far,
+[data-theme="light"] .fab,
+[data-theme="light"] .material-icons,
+[data-theme="light"] .feature-icon,
+[data-theme="light"] .stat-icon,
+[data-theme="light"] .sidebar-logo i,
+[data-theme="light"] .nav-link i,
+[data-theme="light"] .theme-toggle i,
+[data-theme="light"] .faq-question i,
+[data-theme="light"] .icon-box {
+    color: var(--icon-color) !important;
+    fill: currentColor !important;
+    opacity: 1 !important;
+    filter: none !important;
+    text-shadow: none !important;
+}
+
+[data-theme="light"] .icon-box,
+[data-theme="light"] .feature-icon,
+[data-theme="light"] .stat-icon,
+[data-theme="light"] .theme-toggle,
+[data-theme="light"] .nav-link,
+[data-theme="light"] .faq-question {
+    background: var(--icon-bg-soft) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] .sidebar,
+[data-theme="light"] .main-content,
+[data-theme="light"] .content,
+[data-theme="light"] .card,
+[data-theme="light"] .panel,
+[data-theme="light"] .feature-card,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .faq-item,
+[data-theme="light"] .quick-nav,
+[data-theme="light"] .quick-nav-item,
+[data-theme="light"] .nav-item,
+[data-theme="light"] .nav-btn,
+[data-theme="light"] .action-btn,
+[data-theme="light"] .button,
+[data-theme="light"] .btn {
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+}
+
+[data-theme="light"] .feature-card,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .sidebar,
+[data-theme="light"] .main-content,
+[data-theme="light"] .card,
+[data-theme="light"] .panel,
+[data-theme="light"] .faq-item,
+[data-theme="light"] .quick-nav,
+[data-theme="light"] .quick-nav-item,
+[data-theme="light"] .nav-item {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .feature-card .feature-icon,
+[data-theme="light"] .stat-card .stat-icon,
+[data-theme="light"] .faq-item .faq-question i,
+[data-theme="light"] .sidebar-logo i,
+[data-theme="light"] .quick-nav-item i,
+[data-theme="light"] .nav-item i,
+[data-theme="light"] .action-btn i,
+[data-theme="light"] .nav-btn i {
+    color: var(--primary) !important;
+}
+
+[data-theme="light"] .text-light,
+[data-theme="light"] .text-muted,
+[data-theme="light"] .section-subtitle,
+[data-theme="light"] .stat-label,
+[data-theme="light"] .feature-description,
+[data-theme="light"] .faq-answer,
+[data-theme="light"] .sidebar-menu a,
+[data-theme="light"] .sidebar-item span,
+[data-theme="light"] .quick-nav a,
+[data-theme="light"] .quick-nav-item a,
+[data-theme="light"] .quick-nav-item span,
+[data-theme="light"] .nav-item a,
+[data-theme="light"] .nav-item span {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="light"] .btn i,
+[data-theme="light"] .button i,
+[data-theme="light"] .action-btn i,
+[data-theme="light"] .nav-btn i,
+[data-theme="light"] .quick-nav-item i,
+[data-theme="light"] .nav-item i {
+    color: inherit !important;
+}
+
+[data-theme="light"] .quick-nav a,
+[data-theme="light"] .quick-nav-item a,
+[data-theme="light"] .nav-item a,
+[data-theme="light"] .sidebar-menu a,
+[data-theme="light"] .sidebar-item span {
+    background: transparent !important;
+    border-color: transparent !important;
+}
+
