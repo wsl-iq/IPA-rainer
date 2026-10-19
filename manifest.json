@@ -1,0 +1,16 @@
+{
+  "name": "IPA Trainer - تعلم النطق الصحيح",
+  "short_name": "IPA Trainer",
+  "description": "تطبيق تفاعلي لتعلم النطق الصحيح باستخدام الأبجدية الصوتية الدولية",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
