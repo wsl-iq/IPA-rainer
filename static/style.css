@@ -2061,3 +2061,72 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
+
+.record-animation.hidden,
+.record-result.hidden {
+    display: none !important;
+}
+
+.record-result {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.88rem;
+    margin-top: 12px;
+    animation: pageIn 250ms ease;
+}
+
+.record-result.correct {
+    background: var(--success-soft);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.record-result.incorrect {
+    background: var(--error-soft);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.record-result i {
+    font-size: 1.1rem;
+}
+
+.record-animation {
+    text-align: center;
+    padding: 16px 0;
+    animation: pageIn 250ms ease;
+}
+
+.record-mic {
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 14px;
+    background: var(--accent-soft);
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: recordPulse 1.4s ease-in-out infinite;
+}
+
+.record-mic i {
+    font-size: 1.6rem;
+    color: var(--accent);
+}
+
+@keyframes recordPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(47, 129, 247, 0.4);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 18px rgba(47, 129, 247, 0);
+    }
+}
