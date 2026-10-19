@@ -1,6 +1,6 @@
 ### IPA Trainer - English Learning Pronunciation
 
-### **Version `1.0.1`**
+### **Version `2.0.0`**
 
 ### Fixes
 
