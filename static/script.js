@@ -170,13 +170,16 @@ class IPATrainer {
         this.mediaRecorder = null;
         this.audioChunks = [];
         this._micStream = null;
+        this._recognitionRetries = 0;
 
         if (SR) {
-            this.recognition = new SR();
-            this.recognition.lang = 'en-US';
-            this.recognition.interimResults = false;
-            this.recognition.maxAlternatives = 1;
-            this.recognition.continuous = false;
+            const rec = new SR();
+            rec.lang = 'en-US';
+            rec.interimResults = false;
+            rec.maxAlternatives = 1;
+            rec.continuous = false;
+            try { rec.serviceURI = 'https://www.google.com/speech-api/v2/recognize'; } catch (e) {}
+            this.recognition = rec;
         }
     }
 
@@ -185,7 +188,9 @@ class IPATrainer {
             return { ok: false, reason: 'unsupported' };
         }
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            });
             this._micStream = stream;
             return { ok: true, stream };
         } catch (err) {
@@ -563,23 +568,25 @@ class IPATrainer {
             toast.warning('ابحث عن كلمة أولاً');
             return;
         }
-        if (!this.recognitionSupported) {
-            toast.error('متصفحك لا يدعم التعرف الصوتي. استخدم Chrome أو Edge على localhost/HTTPS.');
-            return;
-        }
         const targetWord = this.currentWord;
+        const hasRecognition = this.recognitionSupported;
         dialog.show({
             title: 'تسجيل النطق',
             icon: 'fa-microphone-alt',
             content: `
-                <p>الكلمة المستهدفة:</p>
-                <div style="text-align:center;padding:14px 0">
-                    <span style="font-family:var(--font-mono);font-size:1.6rem;font-weight:800;color:var(--accent)">${targetWord}</span>
+                <div style="text-align:center;padding:10px 0 16px">
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:6px">الكلمة المستهدفة</div>
+                    <div style="font-family:var(--font-mono);font-size:1.8rem;font-weight:800;color:var(--accent)">${targetWord}</div>
                 </div>
-                <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:8px">
-                    <i class="fas fa-info-circle"></i> عند الضغط على "ابدأ" سيطلب المتصفح إذن الميكروفون — اسمح به.
+                ${!hasRecognition ? `
+                    <div class="record-result incorrect" style="display:flex">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        متصفحك لا يدعم التعرف الصوتي التلقائي — ستحتاج للتقييم اليدوي
+                    </div>
+                ` : ''}
+                <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:12px">
+                    <i class="fas fa-info-circle"></i> سيطلب المتصفح إذن الميكروفون. اسمح به ثم انطق الكلمة.
                 </p>
-                <div id="recordResult" class="record-result hidden"></div>
             `,
             confirmText: 'ابدأ التسجيل',
             cancelText: 'إغلاق',
@@ -591,60 +598,22 @@ class IPATrainer {
     }
 
     async _startRecordingFlow(targetWord) {
-        const permissionRequest = this._requestMicrophonePermission();
-        dialog.show({
-            title: 'جاري التحضير...',
-            icon: 'fa-hourglass-half',
-            content: `
-                <div class="record-animation">
-                    <div class="record-mic"><i class="fas fa-microphone-alt"></i></div>
-                    <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:12px">
-                        <i class="fas fa-spinner fa-spin"></i> طلب إذن الميكروفون...
-                    </p>
-                </div>
-            `,
-            confirmText: '',
-            cancelText: 'إلغاء',
-        }).then((canceled) => {
-            if (canceled === null) this._stopMicStream();
-        });
-
-        const perm = await permissionRequest;
-        document.querySelectorAll('.dialog-overlay').forEach(o => {
-            if (o.querySelector('.dialog-panel')) {
-                o.classList.remove('active');
-                setTimeout(() => { if (o.parentNode) o.parentNode.removeChild(o); }, 200);
-            }
-        });
-
+        const perm = await this._requestMicrophonePermission();
         if (!perm.ok) {
-            this._handlePermissionError(perm.reason);
+            this._showPermissionError(perm.reason);
             return;
         }
-        this._runSpeechRecognition(targetWord);
+        if (!this.recognitionSupported || !this.recognition) {
+            this._startManualRecording(targetWord);
+            return;
+        }
+        this._trySpeechRecognition(targetWord);
     }
 
-    _handlePermissionError(reason) {
-        const msgs = {
-            denied: {
-                title: 'إذن الميكروفون مرفوض',
-                body: '<p>تم رفض إذن الميكروفون. اضغط أيقونة القفل بجانب عنوان الموقع، اختر إعدادات الموقع، ثم فعّل الميكروفون وأعد تحميل الصفحة.</p>',
-            },
-            notfound: { title: 'لا يوجد ميكروفون', body: '<p>لم يُعثر على ميكروفون. تحقق من توصيل جهاز صوتي.</p>' },
-            inuse: { title: 'الميكروفون مشغول', body: '<p>تطبيق آخر يستخدم الميكروفون. أغلقه وحاول مجدداً.</p>' },
-            security: { title: 'خطأ أمني', body: '<p>يجب تشغيل الموقع عبر <strong>HTTPS</strong> أو <strong>localhost</strong> لاستخدام الميكروفون.</p>' },
-            unsupported: { title: 'غير مدعوم', body: '<p>متصفحك لا يدعم الوصول للميكروفون.</p>' },
-            unknown: { title: 'خطأ غير معروف', body: '<p>تعذر الوصول للميكروفون. تحقق من إعدادات المتصفح.</p>' },
-        };
-        const m = msgs[reason] || msgs.unknown;
-        dialog.show({ title: m.title, icon: 'fa-exclamation-triangle', content: m.body, confirmText: 'حسناً', cancelText: '' });
-    }
-
-    _runSpeechRecognition(targetWord) {
+    _trySpeechRecognition(targetWord) {
         const rec = this.recognition;
         if (!rec) {
-            this._stopMicStream();
-            toast.error('التعرف الصوتي غير متاح');
+            this._startManualRecording(targetWord);
             return;
         }
 
@@ -655,117 +624,347 @@ class IPATrainer {
 
         const cleanTarget = targetWord.toLowerCase().trim();
         let finished = false;
+        let hasReceivedResult = false;
         const cleanup = () => {
-            this._stopMicStream();
             this.recognitionBusy = false;
-            document.querySelectorAll('.dialog-overlay').forEach(o => {
-                const btn = o.querySelector('.dialog-close');
-                if (btn) btn.click();
+            this._stopMicStream();
+        };
+        const closeActiveDialogs = () => {
+            document.querySelectorAll('.dialog-overlay.active').forEach(o => {
+                o.classList.remove('active');
+                setTimeout(() => { if (o.parentNode) o.parentNode.removeChild(o); }, 200);
             });
         };
-        const finish = (spoken) => {
+        const finish = (spoken, source = 'auto') => {
             if (finished) return;
             finished = true;
             cleanup();
-            this._evaluateRecording(spoken, cleanTarget);
+            closeActiveDialogs();
+            this._evaluateRecording(spoken, cleanTarget, source);
         };
 
         rec.onresult = (event) => {
-            try { finish((event.results[0][0].transcript || '').toLowerCase().trim()); }
-            catch (e) { console.error('Parse result error:', e); finish(''); }
+            hasReceivedResult = true;
+            try {
+                const spoken = (event.results[0][0].transcript || '').toLowerCase().trim();
+                finish(spoken, 'auto');
+            } catch (e) {
+                console.error('Parse error:', e);
+                finish('', 'auto');
+            }
         };
         rec.onerror = (event) => {
             if (finished) return;
-            console.warn('Recognition error:', event.error);
-            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            const err = event.error;
+            console.warn('Recognition error:', err, event.message || '');
+
+            if (err === 'network') {
                 finished = true;
                 cleanup();
-                this._handlePermissionError('denied');
-            } else if (event.error === 'audio-capture') {
-                finished = true;
-                cleanup();
-                this._handlePermissionError('notfound');
-            } else if (event.error === 'network') {
-                finished = true;
-                cleanup();
-                dialog.show({ title: 'خطأ شبكة', icon: 'fa-wifi', content: '<p>التعرف الصوتي يحتاج اتصال إنترنت. تحقق من اتصالك.</p>', confirmText: 'حسناً', cancelText: '' });
-            } else if (event.error === 'aborted') {
-                finished = true;
-                cleanup();
-            } else {
-                finish('');
+                closeActiveDialogs();
+                this._fallbackToManualAfterNetworkError(targetWord);
+                return;
             }
+            if (err === 'no-speech') {
+                finish('', 'auto');
+                return;
+            }
+            if (err === 'not-allowed' || err === 'service-not-allowed') {
+                finished = true;
+                cleanup();
+                closeActiveDialogs();
+                this._showPermissionError('denied');
+                return;
+            }
+            if (err === 'audio-capture') {
+                finished = true;
+                cleanup();
+                closeActiveDialogs();
+                this._showPermissionError('notfound');
+                return;
+            }
+            if (err === 'aborted') {
+                finished = true;
+                cleanup();
+                return;
+            }
+            finish('', 'auto');
         };
         rec.onend = () => {
-            if (!finished) finish('');
+            if (!finished && !hasReceivedResult) {
+                finished = true;
+                cleanup();
+                this._evaluateRecording('', cleanTarget, 'auto');
+            }
         };
 
         dialog.show({
             title: 'التسجيل نشط',
             icon: 'fa-microphone',
             content: `
-                <p style="text-align:center">انطق الآن:</p>
-                <div style="text-align:center;padding:10px 0 16px">
-                    <span style="font-family:var(--font-mono);font-size:1.8rem;font-weight:800;color:var(--accent)">${targetWord}</span>
+                <div style="text-align:center;padding:8px 0 14px">
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">انطق الآن</div>
+                    <div style="font-family:var(--font-mono);font-size:1.8rem;font-weight:800;color:var(--accent)">${targetWord}</div>
                 </div>
                 <div class="record-animation">
                     <div class="record-mic"><i class="fas fa-microphone-alt"></i></div>
                     <div class="sound-waves"><span></span><span></span><span></span><span></span><span></span></div>
-                    <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:10px">جاري الاستماع — تحدث الآن</p>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:10px">
+                        <i class="fas fa-circle" style="color:var(--error);font-size:0.45rem"></i> جاري الاستماع...
+                    </p>
                 </div>
             `,
             confirmText: 'إيقاف',
             cancelText: '',
-        }).then(() => {
-            if (!finished) {
-                try { rec.abort(); } catch (e) {}
-                finished = true;
-                cleanup();
-            }
         });
 
-        try {
-            rec.start();
-            this.recognitionBusy = true;
-        } catch (err) {
-            if (err.name === 'InvalidStateError') {
-                try { rec.abort(); } catch (e) {}
-                setTimeout(() => {
-                    try { rec.start(); this.recognitionBusy = true; }
-                    catch (e2) { finished = true; cleanup(); toast.error('تعذر بدء التسجيل'); }
-                }, 250);
-            } else {
-                finished = true;
-                cleanup();
-                console.error('start() failed:', err);
-                toast.error('تعذر بدء التسجيل');
+        setTimeout(() => {
+            try {
+                rec.start();
+                this.recognitionBusy = true;
+            } catch (err) {
+                if (err.name === 'InvalidStateError') {
+                    try { rec.abort(); } catch (e) {}
+                    setTimeout(() => {
+                        try {
+                            rec.start();
+                            this.recognitionBusy = true;
+                        } catch (e2) {
+                            finished = true;
+                            cleanup();
+                            closeActiveDialogs();
+                            this._fallbackToManualAfterNetworkError(targetWord);
+                        }
+                    }, 300);
+                } else {
+                    finished = true;
+                    cleanup();
+                    closeActiveDialogs();
+                    console.error('start() failed:', err);
+                    this._fallbackToManualAfterNetworkError(targetWord);
+                }
             }
+        }, 150);
+
+        setTimeout(() => {
+            if (!finished) {
+                try { rec.stop(); } catch (e) {}
+            }
+        }, 12000);
+    }
+
+    _fallbackToManualAfterNetworkError(targetWord) {
+        dialog.show({
+            title: 'خادم التعرف غير متاح',
+            icon: 'fa-wifi',
+            content: `
+                <div class="record-result incorrect" style="display:flex;margin-top:0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div style="text-align:right">
+                        <strong>خطأ شبكة في خدمة التعرف الصوتي</strong>
+                        <div style="font-size:0.8rem;margin-top:4px">
+                            خدمة التعرف في Chrome تحتاج اتصالاً بخوادم Google. قد يكون الاتصال محجوباً أو خلف VPN/جدار حماية.
+                        </div>
+                    </div>
+                </div>
+                <p style="margin-top:12px;font-size:0.85rem;color:var(--text-secondary)">
+                    بديل: سنسجل صوتك ونشغّله لك لتقارن نطقك بالنطق الصحيح يدوياً.
+                </p>
+            `,
+            confirmText: 'التسجيل اليدوي',
+            cancelText: 'إلغاء',
+        }).then(v => {
+            if (v === true) this._startManualRecording(targetWord);
+        });
+    }
+
+    _startManualRecording(targetWord) {
+        if (!this._micStream) {
+            this._requestMicrophonePermission().then(perm => {
+                if (!perm.ok) { this._showPermissionError(perm.reason); return; }
+                this._startManualRecording(targetWord);
+            });
+            return;
+        }
+
+        const Recorder = window.MediaRecorder;
+        const mimeType = Recorder && [
+            'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg',
+        ].find(type => Recorder.isTypeSupported(type));
+        if (!Recorder || !mimeType) {
+            this._stopMicStream();
+            this._showManualEvaluation(targetWord);
+            return;
+        }
+
+        try {
+            const recorder = new Recorder(this._micStream, { mimeType });
+            const chunks = [];
+            let finished = false;
+            recorder.ondataavailable = e => {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+            recorder.onstop = () => {
+                if (finished) return;
+                finished = true;
+                try {
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    this._showManualPlayback(url, targetWord);
+                } catch (e) {
+                    console.error('Blob error:', e);
+                    this._showManualEvaluation(targetWord);
+                }
+                this._stopMicStream();
+            };
+            recorder.onerror = e => {
+                console.error('Recorder error:', e);
+                if (!finished) {
+                    finished = true;
+                    this._stopMicStream();
+                    this._showManualEvaluation(targetWord);
+                }
+            };
+
+            dialog.show({
+                title: 'تسجيل يدوي',
+                icon: 'fa-microphone',
+                content: `
+                    <div style="text-align:center;padding:8px 0 14px">
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">انطق</div>
+                        <div style="font-family:var(--font-mono);font-size:1.8rem;font-weight:800;color:var(--accent)">${targetWord}</div>
+                    </div>
+                    <div class="record-animation">
+                        <div class="record-mic"><i class="fas fa-microphone-alt"></i></div>
+                        <div class="sound-waves"><span></span><span></span><span></span><span></span><span></span></div>
+                        <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:10px">
+                            <i class="fas fa-circle" style="color:var(--error);font-size:0.45rem"></i> جاري التسجيل... اضغط "إيقاف" عند الانتهاء
+                        </p>
+                    </div>
+                `,
+                confirmText: 'إيقاف التسجيل',
+                cancelText: 'إلغاء',
+            }).then(v => {
+                if (recorder.state !== 'inactive') {
+                    try { recorder.stop(); } catch (e) {}
+                }
+                if (v === null) {
+                    finished = true;
+                    this._stopMicStream();
+                }
+            });
+
+            recorder.start();
+            this.mediaRecorder = recorder;
+            setTimeout(() => {
+                if (!finished && recorder.state === 'recording') {
+                    try { recorder.stop(); } catch (e) {}
+                }
+            }, 10000);
+        } catch (err) {
+            console.error('MediaRecorder error:', err);
+            this._stopMicStream();
+            this._showManualEvaluation(targetWord);
         }
     }
 
-    _evaluateRecording(spoken, target) {
+    _showManualPlayback(audioUrl, targetWord) {
+        const audio = new Audio(audioUrl);
+        dialog.show({
+            title: 'مقارنة النطق',
+            icon: 'fa-headphones',
+            content: `
+                <div style="text-align:center;padding:6px 0 14px">
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">الكلمة</div>
+                    <div style="font-family:var(--font-mono);font-size:1.6rem;font-weight:800;color:var(--accent)">${targetWord}</div>
+                </div>
+                <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;text-align:center">
+                    استمع لنطقك ثم قارنه بالنطق الصحيح
+                </p>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <button class="btn-secondary" id="playMine" style="width:100%"><i class="fas fa-play"></i> استمع لنطقي</button>
+                    <button class="btn-primary" id="playRef" style="width:100%"><i class="fas fa-volume-up"></i> النطق الصحيح</button>
+                </div>
+                <p style="margin-top:14px;font-size:0.82rem;color:var(--text-secondary);text-align:center">هل نطقك مطابق؟</p>
+            `,
+            confirmText: 'نعم، صحيح',
+            cancelText: 'لا، أحاول مرة أخرى',
+        }).then(v => {
+            try { audio.pause(); } catch (e) {}
+            URL.revokeObjectURL(audioUrl);
+            if (v === true) {
+                this.addPoints(10);
+                toast.success('ممتاز! +10 نقاط');
+                this._recordManualSuccess(targetWord);
+            } else if (v === false || v === null) {
+                setTimeout(() => this._startManualRecording(targetWord), 200);
+            }
+        });
+
+        setTimeout(() => {
+            document.getElementById('playMine')?.addEventListener('click', () => {
+                audio.currentTime = 0;
+                audio.play().catch(() => toast.error('تعذر تشغيل التسجيل'));
+            });
+            document.getElementById('playRef')?.addEventListener('click', () => this.speak(targetWord, 0.85));
+        }, 80);
+    }
+
+    _showManualEvaluation(targetWord) {
+        dialog.show({
+            title: 'تقييم يدوي',
+            icon: 'fa-user-check',
+            content: `
+                <div style="text-align:center;padding:6px 0 14px">
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">الكلمة</div>
+                    <div style="font-family:var(--font-mono);font-size:1.6rem;font-weight:800;color:var(--accent)">${targetWord}</div>
+                </div>
+                <p style="font-size:0.85rem;color:var(--text-secondary);text-align:center">استمع للنطق الصحيح، كرر الكلمة، ثم قيّم نفسك.</p>
+                <button class="btn-primary" id="playRefManual" style="width:100%;margin-top:10px"><i class="fas fa-volume-up"></i> النطق الصحيح</button>
+            `,
+            confirmText: 'نطقتها بشكل صحيح',
+            cancelText: 'لم أنجح',
+        }).then(v => {
+            if (v === true) {
+                this.addPoints(5);
+                toast.success('أحسنت! +5 نقاط');
+            }
+        });
+        setTimeout(() => {
+            document.getElementById('playRefManual')?.addEventListener('click', () => this.speak(targetWord, 0.85));
+        }, 80);
+    }
+
+    _recordManualSuccess(word) {
+        try {
+            this.userHistory.searches.unshift({ word, ipa: '—', date: new Date().toISOString() });
+            if (this.userHistory.searches.length > 50) this.userHistory.searches.length = 50;
+            this.saveHistory();
+        } catch (e) {}
+    }
+
+    _evaluateRecording(spoken, target, source = 'auto') {
         const isCorrect = spoken && spoken === target;
         const isEmpty = !spoken;
-        let title = 'حاول مرة أخرى';
-        let icon = 'fa-times-circle';
-        let body;
-
+        let title, icon, body;
         if (isCorrect) {
             title = 'نطق صحيح';
             icon = 'fa-check-circle';
-            body = '<div class="record-result correct"><i class="fas fa-check-circle"></i> ممتاز! النطق صحيح</div>';
+            body = '<div class="record-result correct"><i class="fas fa-check-circle"></i> ممتاز! النطق مطابق</div>';
             this.addPoints(10);
         } else if (isEmpty) {
-            title = 'لم يتم سماع شيء';
+            title = 'لم يُسمع صوت';
             icon = 'fa-microphone-slash';
-            body = '<div class="record-result incorrect"><i class="fas fa-microphone-slash"></i> لم يُلتقط أي صوت — تحدث بوضوح</div>';
+            body = '<div class="record-result incorrect"><i class="fas fa-microphone-slash"></i> لم يُلتقط أي صوت — تحدث بوضوح وأقرب للميكروفون</div>';
         } else {
+            title = 'النطق غير مطابق';
+            icon = 'fa-times-circle';
             body = `
                 <div class="record-result incorrect"><i class="fas fa-times-circle"></i> النطق غير مطابق</div>
                 <div style="margin-top:12px;padding:10px;background:var(--bg-elevated);border-radius:var(--radius-md);text-align:center">
-                    <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">قلت:</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">قلت</div>
                     <div style="font-family:var(--font-mono);font-size:1rem;color:var(--error)">${spoken}</div>
-                    <div style="font-size:0.72rem;color:var(--text-muted);margin:8px 0 4px">المطلوب:</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin:8px 0 4px">المطلوب</div>
                     <div style="font-family:var(--font-mono);font-size:1rem;color:var(--success)">${target}</div>
                 </div>
             `;
@@ -774,9 +973,38 @@ class IPATrainer {
             title, icon, content: body,
             confirmText: isCorrect ? 'رائع' : 'إعادة المحاولة',
             cancelText: 'إغلاق',
-        }).then((v) => {
-            if (!isCorrect && v === true) setTimeout(() => this._runSpeechRecognition(target), 250);
+        }).then(v => {
+            if (!isCorrect && v === true) {
+                setTimeout(() => {
+                    if (source === 'auto' && this.recognition) this._trySpeechRecognition(target);
+                    else this._startManualRecording(target);
+                }, 250);
+            }
         });
+    }
+
+    _showPermissionError(reason) {
+        const messages = {
+            denied: {
+                title: 'إذن الميكروفون مرفوض',
+                body: `
+                    <p>تم رفض إذن الميكروفون. لإعادة التفعيل:</p>
+                    <ul class="dialog-examples-list">
+                        <li><i class="fas fa-check"></i> اضغط أيقونة القفل بجانب عنوان الموقع</li>
+                        <li><i class="fas fa-check"></i> اختر "Site settings" أو "إعدادات الموقع"</li>
+                        <li><i class="fas fa-check"></i> فعّل "Microphone"</li>
+                        <li><i class="fas fa-check"></i> أعد تحميل الصفحة</li>
+                    </ul>
+                `,
+            },
+            notfound: { title: 'لا يوجد ميكروفون', body: '<p>لم يُعثر على جهاز ميكروفون. تحقق من التوصيلات.</p>' },
+            inuse: { title: 'الميكروفون مشغول', body: '<p>تطبيق آخر يستخدم الميكروفون. أغلقه ثم حاول مجدداً.</p>' },
+            security: { title: 'خطأ أمني', body: '<p>يجب تشغيل الموقع عبر <strong>HTTPS</strong> أو <strong>localhost</strong> لاستخدام الميكروفون.</p>' },
+            unsupported: { title: 'غير مدعوم', body: '<p>متصفحك لا يدعم الوصول للميكروفون.</p>' },
+            unknown: { title: 'خطأ غير معروف', body: '<p>تعذر الوصول للميكروفون.</p>' },
+        };
+        const m = messages[reason] || messages.unknown;
+        dialog.show({ title: m.title, icon: 'fa-exclamation-triangle', content: m.body, confirmText: 'حسناً', cancelText: '' });
     }
 
     /* ============ TRAINING ============ */
